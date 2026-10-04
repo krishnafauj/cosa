@@ -48,17 +48,6 @@ Then open:
 
 If `migrate` fails on the pooler, run it once with the **direct** host. Remove `-pooler` from the host in `DATABASE_URL`, migrate, then put it back.
 
-### Logging in during development
-
-`ALLOW_DEV_LOGIN=true` (only works with `DJANGO_DEBUG=true`) enables a login that needs no Google account:
-
-```http
-POST /api/auth/dev-login/
-{"email": "gensec_1@students.iiitr.ac.in"}
-```
-
-It returns `access`, `refresh` and `user`. Send `Authorization: Bearer <access>` on every request. In Swagger, use the **Authorize** button.
-
 ### Google login (real)
 
 1. Google Cloud Console → APIs & Services → Credentials → **OAuth client ID** (Web), and add your frontend origin.

@@ -15,7 +15,6 @@ interface AuthState {
   user: Me | null;
   loading: boolean;
   loginWithGoogle: (idToken: string) => Promise<void>;
-  devLogin: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
 }
@@ -63,12 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [finishLogin],
   );
 
-  const devLogin = useCallback(
-    async (email: string) => {
-      finishLogin(await api<LoginResponse>("/api/auth/dev-login/", { method: "POST", body: { email }, auth: false }));
-    },
-    [finishLogin],
-  );
 
   const logout = useCallback(async () => {
     const refresh = tokens.refresh;
@@ -83,8 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const value = useMemo(
-    () => ({ user, loading, loginWithGoogle, devLogin, logout, reload }),
-    [user, loading, loginWithGoogle, devLogin, logout, reload],
+    () => ({ user, loading, loginWithGoogle, logout, reload }),
+    [user, loading, loginWithGoogle, logout, reload],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

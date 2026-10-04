@@ -3,7 +3,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
-from rest_framework.exceptions import AuthenticationFailed, NotFound
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,7 +13,6 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import RoleMailbox, User
 from .serializers import (
-    DevLoginSerializer,
     GoogleLoginSerializer,
     LogoutSerializer,
     MeSerializer,
@@ -65,26 +64,6 @@ class GoogleLoginView(APIView):
         )
         return _login_response(user, request)
 
-
-class DevLoginView(APIView):
-    """Local development only (DEBUG and ALLOW_DEV_LOGIN): log in by email."""
-
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_scope = "auth"
-    serializer_class = DevLoginSerializer
-
-    @extend_schema(request=DevLoginSerializer)
-    def post(self, request):
-        if not settings.ALLOW_DEV_LOGIN:
-            raise NotFound()
-        serializer = DevLoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = resolve_login(
-            serializer.validated_data["email"],
-            full_name=serializer.validated_data.get("full_name", ""),
-        )
-        return _login_response(user, request)
 
 
 class RefreshView(TokenRefreshView):

@@ -52,9 +52,20 @@ class IssueListSerializer(serializers.ModelSerializer):
             "is_escalated",
             "reopened_count",
             "upvote_count",
+            "my_support",
             "created_at",
             "updated_at",
         ]
+
+    my_support = serializers.SerializerMethodField()
+
+    def get_my_support(self, obj) -> str | None:
+        """'PUBLIC' / 'PRIVATE' if the viewer supports this issue, else null.
+        Uses the `_my_support` annotation from the view (no extra query)."""
+        value = getattr(obj, "_my_support", None)
+        if value is None:
+            return None
+        return "PRIVATE" if value else "PUBLIC"
 
 
 class MyIssueSerializer(IssueListSerializer):
@@ -197,3 +208,26 @@ class IssueEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = IssueEvent
         fields = ["id", "actor", "actor_role", "action", "field", "old_value", "new_value", "created_at"]
+
+
+class SupporterSerializer(serializers.Serializer):
+    """A student on an issue, shown as 'Name (ROLL NO)'."""
+
+    id = serializers.IntegerField(source="user.id")
+    full_name = serializers.CharField(source="user.full_name")
+    roll_number = serializers.CharField(source="user.roll_number")
+    branch = serializers.CharField(source="user.branch")
+    year_of_study = serializers.IntegerField(source="user.year_of_study", allow_null=True)
+    avatar_url = serializers.SerializerMethodField()
+    role = serializers.CharField()
+    is_private = serializers.BooleanField()
+    joined_at = serializers.DateTimeField()
+
+    def get_avatar_url(self, obj) -> str:
+        from apps.accounts.serializers import picture_url
+
+        return picture_url(obj["user"], self.context.get("request"))
+
+
+class SupportSerializer(serializers.Serializer):
+    private = serializers.BooleanField(default=False)

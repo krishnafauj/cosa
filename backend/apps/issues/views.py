@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import django_filters
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -14,9 +14,10 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import exports
 from . import permissions as perms
 from . import services
-from .models import Category, Issue, IssueUpdate, Remark
+from .models import Category, Issue, IssueUpdate, IssueUpvote, Remark
 from .serializers import (
     AssignSerializer,
     CategorySerializer,
@@ -31,6 +32,8 @@ from .serializers import (
     ReasonSerializer,
     RemarkSerializer,
     StatusChangeSerializer,
+    SupporterSerializer,
+    SupportSerializer,
 )
 
 ESCALATION_DAYS = settings.PORTAL_RULES["ESCALATION_AFTER_DAYS"]
@@ -111,6 +114,11 @@ class IssueViewSet(
 
     def get_queryset(self):
         qs = base_issue_queryset()
+        user = self.request.user
+        if user.is_authenticated:
+            # The viewer's own support (null / False=public / True=private), one subquery.
+            mine = IssueUpvote.objects.filter(issue=OuterRef("pk"), user=user).values("is_private")[:1]
+            qs = qs.annotate(_my_support=Subquery(mine))
         if self.action == "retrieve":
             qs = qs.prefetch_related("attachments")
         return qs
@@ -245,6 +253,58 @@ class IssueViewSet(
         issue = self.get_object()
         upvoted, count = services.toggle_upvote(request.user, issue)
         return Response({"upvoted": upvoted, "upvote_count": count})
+
+    @extend_schema(request=SupportSerializer, responses={200: dict})
+    @action(detail=True, methods=["post"])
+    def support(self, request, pk=None):
+        """Support this issue publicly (name + roll no shown) or privately (only counted)."""
+        issue = self.get_object()
+        s = SupportSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        _, count = services.support(request.user, issue, private=s.validated_data["private"])
+        return Response({"my_support": "PRIVATE" if s.validated_data["private"] else "PUBLIC", "upvote_count": count})
+
+    @extend_schema(request=None, responses={200: dict})
+    @action(detail=True, methods=["post"])
+    def unsupport(self, request, pk=None):
+        issue = self.get_object()
+        _, count = services.unsupport(request.user, issue)
+        return Response({"my_support": None, "upvote_count": count})
+
+    @extend_schema(responses={200: dict})
+    @action(detail=True, methods=["get"])
+    def supporters(self, request, pk=None):
+        """Students on this issue: the raiser first, then supporters.
+        Private supporters are counted but only COSA (and the student) see their names."""
+        issue = self.get_object()
+        user = request.user
+        rows = [{"user": issue.created_by, "role": "RAISED", "is_private": False, "joined_at": issue.created_at}]
+        private_hidden = 0
+        for u in issue.upvotes.select_related("user").order_by("created_at"):
+            if u.is_private and not user.is_cosa and u.user_id != user.pk:
+                private_hidden += 1
+                continue
+            rows.append({"user": u.user, "role": "SUPPORTER", "is_private": u.is_private, "joined_at": u.created_at})
+        data = SupporterSerializer(rows, many=True, context=self.get_serializer_context()).data
+        return Response({"total": len(rows) + private_hidden, "private_hidden": private_hidden, "results": data})
+
+    @extend_schema(responses={(200, exports.XLSX): bytes})
+    @action(detail=True, methods=["get"], url_path="supporters/export")
+    def export_supporters(self, request, pk=None):
+        """COSA: download the students on this issue as an Excel sheet."""
+        if not perms.can_export_supporters(request.user):
+            raise PermissionDenied("Only COSA members can download this sheet.")
+        issue = self.get_object()
+        return exports.issue_supporters_xlsx(issue)
+
+    @extend_schema(responses={(200, exports.XLSX): bytes})
+    @action(detail=False, methods=["get"])
+    def export(self, request):
+        """COSA: download all issues (same filters as the list) as an Excel sheet."""
+        if not perms.can_export_supporters(request.user):
+            raise PermissionDenied("Only COSA members can download this sheet.")
+        qs = self.filter_queryset(self.get_queryset()).order_by("-created_at")[:5000]
+        return exports.all_issues_xlsx(qs)
 
     # ----- threads ------------------------------------------------------
     @extend_schema(methods=["post"], request=IssueUpdateSerializer, responses=IssueUpdateSerializer)

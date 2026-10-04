@@ -126,6 +126,21 @@ class PortalFlowTests(TestCase):
         new.refresh_from_db()
         self.assertIsNotNone(new.profile_completed_at)
 
+    def test_storage_error_is_clean_json(self):
+        from botocore.exceptions import ClientError
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from io import BytesIO
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (10, 10)).save(buf, "PNG")
+        photo = SimpleUploadedFile("me.png", buf.getvalue(), content_type="image/png")
+        err = ClientError({"Error": {"Code": "AccessDenied", "Message": "denied"}}, "PutObject")
+        with mock.patch("django.core.files.storage.FileSystemStorage.save", side_effect=err):
+            r = client_for(self.student).patch("/api/auth/me/", {"photo": photo}, format="multipart")
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("AccessDenied", r.json()["detail"])
+
     def test_cosa_cannot_raise(self):
         r = client_for(self.gensec).post(
             "/api/issues/", {"title": "x", "description": "y", "category": self.mess.pk}, format="json"
@@ -225,6 +240,61 @@ class PortalFlowTests(TestCase):
         c = client_for(self.other_student)
         self.assertEqual(c.post(url).data, {"upvoted": True, "upvote_count": 1})
         self.assertEqual(c.post(url).data, {"upvoted": False, "upvote_count": 0})
+
+    def test_supporters_and_excel_export(self):
+        from io import BytesIO
+        from openpyxl import load_workbook
+
+        issue = self.raise_issue()
+        base = f"/api/issues/{issue['id']}"
+        # a student without a complete profile can't add their name
+        newbie = User.objects.create_user("cs24b1002@iiitr.ac.in")
+        self.assertEqual(client_for(newbie).post(f"{base}/upvote/").status_code, 403)
+        client_for(self.other_student).post(f"{base}/upvote/")
+
+        rows = client_for(self.other_student).get(f"{base}/supporters/").data["results"]
+        self.assertEqual([(r["full_name"], r["roll_number"], r["role"]) for r in rows],
+                         [("Alice", "ALICE", "RAISED"), ("Bob", "BOB", "SUPPORTER")])
+        self.assertNotIn("email", rows[0])
+
+        # a private supporter: counted for everyone, named only for COSA and themself
+        carol = make_student("carol@students.iiitr.ac.in", "Carol")
+        r = client_for(carol).post(f"{base}/support/", {"private": True}, format="json")
+        self.assertEqual(r.data, {"my_support": "PRIVATE", "upvote_count": 2})
+        seen_by_bob = client_for(self.other_student).get(f"{base}/supporters/").data
+        self.assertEqual((seen_by_bob["total"], seen_by_bob["private_hidden"]), (3, 1))
+        self.assertNotIn("Carol", [r["full_name"] for r in seen_by_bob["results"]])
+        seen_by_cosa = client_for(self.mess_sec).get(f"{base}/supporters/").data
+        self.assertEqual(seen_by_cosa["private_hidden"], 0)
+        self.assertIn(("Carol", True), [(r["full_name"], r["is_private"]) for r in seen_by_cosa["results"]])
+        card = [i for i in client_for(carol).get("/api/issues/").data["results"] if i["id"] == issue["id"]][0]
+        self.assertEqual((card["my_support"], card["upvote_count"]), ("PRIVATE", 2))
+        # switch to public, then withdraw
+        client_for(carol).post(f"{base}/support/", {"private": False}, format="json")
+        self.assertIn("Carol", [r["full_name"] for r in client_for(self.other_student).get(f"{base}/supporters/").data["results"]])
+        self.assertEqual(client_for(carol).post(f"{base}/unsupport/").data, {"my_support": None, "upvote_count": 1})
+        client_for(carol).post(f"{base}/support/", {"private": True}, format="json")
+
+        # only COSA can download
+        self.assertEqual(client_for(self.student).get(f"{base}/supporters/export/").status_code, 403)
+        r = client_for(self.mess_sec).get(f"{base}/supporters/export/")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("spreadsheetml", r["Content-Type"])
+        ws = load_workbook(BytesIO(r.content)).active
+        values = [[c for c in row] for row in ws.iter_rows(values_only=True)]
+        header = values.index(["S.No", "Name", "Roll No", "Branch", "Year", "Semester", "Email", "Role", "Visibility", "Joined at"])
+        self.assertEqual(list(values[header + 1][1:3]), ["Alice", "ALICE"])
+        self.assertEqual(list(values[header + 2][1:3]), ["Bob", "BOB"])
+        self.assertEqual(values[header + 1][3], "Computer Science and Engineering")
+        self.assertEqual((values[header + 3][1], values[header + 3][8]), ("Carol", "Private"))
+
+        # all-issues export respects filters
+        r = client_for(self.gensec).get("/api/issues/export/?category=" + str(self.mess.pk))
+        self.assertEqual(r.status_code, 200)
+        ws = load_workbook(BytesIO(r.content)).active
+        titles = [row[1] for row in ws.iter_rows(values_only=True)]
+        self.assertIn("Cold food", titles)
+        self.assertEqual(client_for(self.student).get("/api/issues/export/").status_code, 403)
 
     def test_board_and_dashboard(self):
         self.raise_issue()

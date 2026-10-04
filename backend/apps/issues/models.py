@@ -142,10 +142,15 @@ class Remark(models.Model):
 
 
 class IssueUpvote(models.Model):
-    """'I'm facing this too'."""
+    """A student supporting an issue ('I'm facing this too').
+
+    Private supports count toward the number on the card, but the student's
+    name is hidden from other students (COSA still sees it).
+    """
 
     issue = models.ForeignKey(Issue, on_delete=models.CASCADE, related_name="upvotes")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
+    is_private = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:

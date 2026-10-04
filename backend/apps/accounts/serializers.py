@@ -161,10 +161,6 @@ class GoogleLoginSerializer(serializers.Serializer):
     id_token = serializers.CharField()
 
 
-class DevLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    full_name = serializers.CharField(required=False, allow_blank=True)
-
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()

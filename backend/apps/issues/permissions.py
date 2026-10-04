@@ -82,7 +82,13 @@ def can_reopen(user, issue) -> bool:
 
 
 def can_upvote(user, issue) -> bool:
-    return user.is_student and issue.created_by_id != user.pk
+    """'I'm facing this too': other students add their name (needs a complete profile)."""
+    return user.is_student and user.profile_complete and issue.created_by_id != user.pk
+
+
+def can_export_supporters(user) -> bool:
+    """Download the sheet of students on an issue: COSA members."""
+    return user.is_cosa
 
 
 def permission_flags(user, issue) -> dict:
@@ -94,4 +100,5 @@ def permission_flags(user, issue) -> dict:
         "can_escalate": can_escalate(user, issue),
         "can_reopen": can_reopen(user, issue),
         "can_upvote": can_upvote(user, issue),
+        "can_export": can_export_supporters(user),
     }

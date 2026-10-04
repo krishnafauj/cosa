@@ -8,20 +8,11 @@ import { ErrorBox, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 
 const GOOGLE_ENABLED = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
-const DEV_LOGIN = process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === "true";
 
-const QUICK_ACCOUNTS = [
-  { label: "New student (first login)", email: "cs25b1001@iiitr.ac.in" },
-  { label: "Student", email: "student1@students.iiitr.ac.in" },
-  { label: "Gen Sec 1", email: "gensec_1@students.iiitr.ac.in" },
-  { label: "President", email: "president@iiitr.ac.in" },
-  { label: "Mess Secretary", email: "messsecretary@iiitr.ac.in" },
-];
 
 export default function LoginPage() {
-  const { user, loading, loginWithGoogle, devLogin } = useAuth();
+  const { user, loading, loginWithGoogle } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,10 +76,15 @@ export default function LoginPage() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/iiitr-logo.png" alt="Indian Institute of Information Technology Raichur" className="mb-10 h-auto w-full max-w-[340px]" />
           <h2 className="text-xl font-semibold text-slate-900">Sign in to the COSA Portal</h2>
-          <p className="mt-1 text-sm text-slate-500">Use your IIITR email, e.g. cs23b1036@iiitr.ac.in.</p>
+          <p className="mt-1 text-sm text-slate-500">Use your IIITR email</p>
 
           <div className="mt-6 space-y-4">
             <ErrorBox error={error} />
+            {busy && (
+              <p className="flex items-center justify-center gap-2 text-sm text-slate-500">
+                <Spinner className="h-4 w-4" /> Signing you in…
+              </p>
+            )}
 
             {GOOGLE_ENABLED ? (
               <div className="flex justify-center">
@@ -102,39 +98,8 @@ export default function LoginPage() {
               </div>
             ) : (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Google sign-in isn&apos;t configured yet. Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> in <code>.env.local</code>.
+                Sign-in isn&apos;t configured yet. Set <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> in <code>.env.local</code>.
               </p>
-            )}
-
-            {DEV_LOGIN && (
-              <div className="rounded-xl border border-dashed border-slate-300 p-4">
-                <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Development login</p>
-                <form
-                  className="mt-3 flex gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (email) run(() => devLogin(email));
-                  }}
-                >
-                  <input className="input" type="email" placeholder="cs23b1036@iiitr.ac.in" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  <button className="btn-primary shrink-0" disabled={busy || !email}>
-                    {busy ? <Spinner className="h-4 w-4 text-white" /> : "Go"}
-                  </button>
-                </form>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {QUICK_ACCOUNTS.map((a) => (
-                    <button
-                      key={a.email}
-                      type="button"
-                      onClick={() => run(() => devLogin(a.email))}
-                      className="chip border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-800"
-                      disabled={busy}
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
             )}
           </div>
         </div>

@@ -386,21 +386,43 @@ def reopen(user, issue, reason):
     return issue
 
 
-def toggle_upvote(user, issue) -> tuple[bool, int]:
-    _ensure(perms.can_upvote(user, issue), "Only other students can mark 'I'm facing this too'.")
+def _check_can_support(user, issue):
+    if user.is_student and not user.profile_complete:
+        raise PermissionDenied("Complete your profile (name and roll number) before raising an issue.")
+    _ensure(perms.can_upvote(user, issue), "You already raised this issue, or it can't be raised again.")
+
+
+def support(user, issue, *, private=False) -> tuple[bool, int]:
+    """Add (or update the visibility of) the user's support. Returns (supporting, count)."""
+    _check_can_support(user, issue)
     with transaction.atomic():
-        deleted, _ = IssueUpvote.objects.filter(issue=issue, user=user).delete()
-        if deleted:
-            Issue.objects.filter(pk=issue.pk).update(upvote_count=F("upvote_count") - 1)
-            upvoted = False
+        existing = IssueUpvote.objects.select_for_update().filter(issue=issue, user=user).first()
+        if existing:
+            if existing.is_private != private:
+                existing.is_private = private
+                existing.save(update_fields=["is_private"])
         else:
             try:
                 with transaction.atomic():
-                    IssueUpvote.objects.create(issue=issue, user=user)
+                    IssueUpvote.objects.create(issue=issue, user=user, is_private=private)
             except IntegrityError:  # double click race
                 pass
             else:
                 Issue.objects.filter(pk=issue.pk).update(upvote_count=F("upvote_count") + 1)
-            upvoted = True
-    count = Issue.objects.values_list("upvote_count", flat=True).get(pk=issue.pk)
-    return upvoted, count
+    return True, Issue.objects.values_list("upvote_count", flat=True).get(pk=issue.pk)
+
+
+def unsupport(user, issue) -> tuple[bool, int]:
+    with transaction.atomic():
+        deleted, _ = IssueUpvote.objects.filter(issue=issue, user=user).delete()
+        if deleted:
+            Issue.objects.filter(pk=issue.pk).update(upvote_count=F("upvote_count") - 1)
+    return False, Issue.objects.values_list("upvote_count", flat=True).get(pk=issue.pk)
+
+
+def toggle_upvote(user, issue) -> tuple[bool, int]:
+    """Older one-click toggle (public support)."""
+    _check_can_support(user, issue)
+    if IssueUpvote.objects.filter(issue=issue, user=user).exists():
+        return unsupport(user, issue)
+    return support(user, issue, private=False)

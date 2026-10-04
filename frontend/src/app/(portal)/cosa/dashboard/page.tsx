@@ -2,16 +2,19 @@
 
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, Clock, Inbox, LayoutGrid, Tag, UserCheck } from "lucide-react";
+import { AlertTriangle, Clock, Download, Inbox, LayoutGrid, Tag, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { EmptyState, ErrorBox, PageHeader, PageLoader } from "@/components/ui";
-import { api } from "@/lib/api";
+import { useState } from "react";
+import { api, downloadFile } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { STATUS_META, STATUS_ORDER } from "@/lib/format";
 import type { Dashboard } from "@/lib/types";
 
 export default function CosaDashboardPage() {
   const { user } = useAuth();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<unknown>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["cosa-dashboard"],
     queryFn: () => api<Dashboard>("/api/cosa/dashboard/"),
@@ -42,12 +45,30 @@ export default function CosaDashboardPage() {
         subtitle={`${user.role_name}${user.can_manage_issues ? " · you can assign members and faculty" : ""}`}
         actions={
           <>
+            <button
+              className="btn-secondary"
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                setExportError(null);
+                try {
+                  await downloadFile("/api/issues/export/", "cosa-issues.xlsx");
+                } catch (e) {
+                  setExportError(e);
+                } finally {
+                  setExporting(false);
+                }
+              }}
+            >
+              <Download className="h-4 w-4" /> {exporting ? "Preparing…" : "Export all issues (.xlsx)"}
+            </button>
             <Link href="/board" className="btn-secondary"><LayoutGrid className="h-4 w-4" /> Open board</Link>
             <Link href="/cosa" className="btn-primary">Post on COSA page</Link>
           </>
         }
       />
 
+      <div className="mb-4"><ErrorBox error={exportError} /></div>
       <div className={clsx("grid gap-3 sm:grid-cols-2", tiles.length === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
         {tiles.map((t) => (
           <Link key={t.label} href={t.href} className="card group p-4 transition hover:border-brand-300">

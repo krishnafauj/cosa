@@ -74,6 +74,7 @@ export interface IssueCard {
   is_escalated: boolean;
   reopened_count: number;
   upvote_count: number;
+  my_support: "PUBLIC" | "PRIVATE" | null;
   created_at: string;
   updated_at: string;
 }
@@ -113,6 +114,7 @@ export interface IssueDetail extends IssueCard {
     can_escalate: boolean;
     can_reopen: boolean;
     can_upvote: boolean;
+    can_export: boolean;
   };
 }
 
@@ -268,4 +270,22 @@ export interface Dashboard {
   escalated: number;
   overdue: number;
   by_category: { category__name: string; n: number }[];
+}
+
+export interface Supporter {
+  id: number;
+  full_name: string;
+  roll_number: string;
+  branch: Branch | "";
+  year_of_study: number | null;
+  avatar_url: string;
+  role: "RAISED" | "SUPPORTER";
+  is_private: boolean;
+  joined_at: string;
+}
+
+export interface SupportersResponse {
+  total: number;
+  private_hidden: number;
+  results: Supporter[];
 }

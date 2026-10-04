@@ -153,8 +153,6 @@ ROLL_BRANCH_CODES = dict(
     pair.split(":", 1) for pair in env_list("ROLL_BRANCH_CODES", "cs:CSE") if ":" in pair
 )
 GOOGLE_CLIENT_IDS = env_list("GOOGLE_CLIENT_IDS")
-# Dev-only email login (no Google) so the API can be exercised locally.
-ALLOW_DEV_LOGIN = env_bool("ALLOW_DEV_LOGIN", False) and DEBUG
 
 # ---------------------------------------------------------------------------
 # REST framework + JWT
@@ -206,6 +204,7 @@ SPECTACULAR_SETTINGS = {
 # CORS / CSRF / security
 # ---------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]  # lets the browser read download file names
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 
 if not DEBUG:
@@ -225,7 +224,10 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 AWS_STORAGE_BUCKET_NAME = os.getenv("S3_BUCKET", "")
-if AWS_STORAGE_BUCKET_NAME:
+# Uploads go to S3 in production. While developing (DEBUG) they are saved in
+# backend/media/ unless USE_S3=true, so a bad AWS key never blocks local work.
+USE_S3 = env_bool("USE_S3", not DEBUG) and bool(AWS_STORAGE_BUCKET_NAME)
+if USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("S3_ACCESS_KEY")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY") or os.getenv("S3_SECRET_KEY")
     AWS_S3_REGION_NAME = os.getenv("AWS_REGION", "us-east-1")

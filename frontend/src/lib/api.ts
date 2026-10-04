@@ -25,7 +25,14 @@ export class ApiError extends Error {
 /** DRF errors come as {"detail": "..."} or {"field": ["msg"]}. Flatten to one line. */
 function readableError(data: unknown): string {
   if (!data) return "";
-  if (typeof data === "string") return data.slice(0, 300);
+  if (typeof data === "string") {
+    // Django debug pages are HTML: show their <title> instead of raw markup.
+    if (data.trimStart().startsWith("<")) {
+      const title = data.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+      return `Server error${title ? `: ${title}` : ""}. Check the backend terminal for details.`;
+    }
+    return data.slice(0, 300);
+  }
   if (Array.isArray(data)) return data.map(readableError).join(" ");
   if (typeof data === "object") {
     const obj = data as Record<string, unknown>;
@@ -94,10 +101,8 @@ async function refreshTokens(): Promise<boolean> {
 // ---------------------------------------------------------------- request
 type Body = Record<string, unknown> | FormData | undefined;
 
-export async function api<T = unknown>(
-  path: string,
-  options: { method?: string; body?: Body; auth?: boolean } = {},
-): Promise<T> {
+/** fetch() with the access token, plus one silent refresh-and-retry on 401. */
+async function authedFetch(path: string, options: { method?: string; body?: Body; auth?: boolean } = {}) {
   const { method = "GET", body, auth = true } = options;
 
   const doFetch = () => {
@@ -123,12 +128,39 @@ export async function api<T = unknown>(
       logoutListeners.forEach((fn) => fn());
     }
   }
+  return res;
+}
 
+export async function api<T = unknown>(
+  path: string,
+  options: { method?: string; body?: Body; auth?: boolean } = {},
+): Promise<T> {
+  const res = await authedFetch(path, options);
   if (res.status === 204 || res.status === 205) return undefined as T;
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (!res.ok) throw new ApiError(res.status, data);
   return data as T;
+}
+
+/** Download a file (e.g. an Excel sheet) from an authenticated endpoint. */
+export async function downloadFile(path: string, fallbackName: string) {
+  const res = await authedFetch(path);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, text ? safeJson(text) : null);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const name = disposition.match(/filename="?([^";]+)"?/)?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function safeJson(text: string) {

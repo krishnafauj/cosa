@@ -2,14 +2,16 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, Check, Paperclip, RotateCcw, Search, ThumbsUp } from "lucide-react";
+import { AlertTriangle, Check, Paperclip, RotateCcw, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { STATUS_META, STATUS_ORDER, timeAgo } from "@/lib/format";
 import { useCategories, useUserSearch } from "@/lib/hooks";
 import type { IssueCard, IssueDetail, IssueStatus, Priority, UserBrief } from "@/lib/types";
+import { canSupport, StudentCount, SupportButton } from "./support";
 import { Avatar, ErrorBox, Modal, PriorityBadge, Spinner, StatusBadge } from "./ui";
 
 // --------------------------------------------------------------------------
@@ -26,6 +28,7 @@ export function IssueCardView({
   onDragStart?: (e: React.DragEvent) => void;
   showStatus?: boolean;
 }) {
+  const { user } = useAuth();
   return (
     <Link
       href={`/issues/${issue.id}`}
@@ -66,14 +69,15 @@ export function IssueCardView({
           {issue.assignees.length === 0 && <span className="text-slate-400 italic">Unassigned</span>}
         </div>
         <div className="flex items-center gap-3">
-          {issue.upvote_count > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <ThumbsUp className="h-3 w-3" /> {issue.upvote_count}
-            </span>
-          )}
+          <StudentCount count={issue.upvote_count + 1} className="font-medium text-slate-600" />
           <span>{timeAgo(issue.created_at)}</span>
         </div>
       </div>
+      {canSupport(user, issue) && (
+        <div className="mt-3 flex justify-end border-t border-slate-100 pt-2.5">
+          <SupportButton issue={issue} />
+        </div>
+      )}
     </Link>
   );
 }

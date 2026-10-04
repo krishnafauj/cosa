@@ -2,15 +2,31 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, ArrowLeft, FileText, History, MessageSquare, Megaphone, Pencil, RotateCcw, ThumbsUp } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Download,
+  FileText,
+  History,
+  MessageSquare,
+  Megaphone,
+  Pencil,
+  RotateCcw,
+  EyeOff,
+  Hand,
+  Settings2,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { ReasonModal, StatusChangeModal, UserPicker } from "@/components/issues";
 import { Avatar, ErrorBox, Modal, PageLoader, PriorityBadge, Spinner, StatusBadge, Tabs, UserLine } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, downloadFile } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { formatDateTime, timeAgo } from "@/lib/format";
-import type { Attachment, IssueDetail, IssueEvent, Remark, TimelineItem, UserBrief } from "@/lib/types";
+import { SupportModal, type MySupport } from "@/components/support";
+import type { Attachment, IssueDetail, IssueEvent, Remark, SupportersResponse, TimelineItem, UserBrief } from "@/lib/types";
 
 export default function IssuePage() {
   const { id } = useParams<{ id: string }>();
@@ -32,14 +48,11 @@ export default function IssuePage() {
     qc.invalidateQueries({ queryKey: ["timeline", issueId] });
     qc.invalidateQueries({ queryKey: ["history", issueId] });
     qc.invalidateQueries({ queryKey: ["remarks", issueId] });
+    qc.invalidateQueries({ queryKey: ["supporters", issueId] });
     qc.invalidateQueries({ queryKey: ["board"] });
     qc.invalidateQueries({ queryKey: ["my-issues"] });
   };
 
-  const upvote = useMutation({
-    mutationFn: () => api(`/api/issues/${issueId}/upvote/`, { method: "POST" }),
-    onSuccess: refresh,
-  });
 
   if (issueQ.isLoading) return <PageLoader />;
   if (issueQ.error || !issueQ.data) return <ErrorBox error={issueQ.error || "Issue not found"} />;
@@ -48,7 +61,7 @@ export default function IssuePage() {
   const isOpen = issue.status !== "COMPLETED";
   const showEscalate = p.can_remark && isOpen && !issue.is_escalated;
   const hasActions =
-    (p.can_edit && isOpen) || p.can_assign || p.can_reopen || showEscalate || p.can_upvote || Boolean(upvote.error);
+    (p.can_edit && isOpen) || p.can_assign || p.can_reopen || showEscalate;
 
   return (
     <div>
@@ -84,6 +97,9 @@ export default function IssuePage() {
             <p className="mt-5 whitespace-pre-wrap text-slate-700">{issue.description}</p>
             {issue.attachments.length > 0 && <Attachments items={issue.attachments} />}
           </div>
+
+          {p.can_upvote && isOpen && <SupportBanner issueId={issueId} issueTitle={issue.title} mine={issue.my_support} />}
+          <SupportersCard issueId={issueId} total={issue.upvote_count + 1} canExport={p.can_export} />
 
           <div>
             <Tabs
@@ -141,16 +157,6 @@ export default function IssuePage() {
             {showEscalate && !p.can_escalate && (
               <p className="text-center text-xs text-slate-500">Escalation opens {formatDateTime(issue.escalation_available_at)}</p>
             )}
-            {p.can_upvote && (
-              <button
-                className={clsx("w-full", issue.has_upvoted ? "btn bg-brand-100 text-brand-800 hover:bg-brand-200" : "btn-secondary")}
-                onClick={() => upvote.mutate()}
-                disabled={upvote.isPending}
-              >
-                <ThumbsUp className="h-4 w-4" /> {issue.has_upvoted ? "You're facing this too" : "I'm facing this too"}
-              </button>
-            )}
-            <ErrorBox error={upvote.error} />
           </div>
           )}
 
@@ -165,7 +171,6 @@ export default function IssuePage() {
             </Detail>
             <Detail label="Faculty"><UserLine user={issue.faculty} /></Detail>
             {issue.tagged_member && <Detail label="Tagged"><UserLine user={issue.tagged_member} /></Detail>}
-            <Detail label="Facing this">{issue.upvote_count} student{issue.upvote_count === 1 ? "" : "s"}</Detail>
             <Detail label="Last updated">{timeAgo(issue.updated_at)}</Detail>
           </div>
         </aside>
@@ -414,5 +419,122 @@ function FacultyModal({ issue, onClose, onDone }: { issue: IssueDetail; onClose:
         <button className="btn-primary" onClick={() => m.mutate()} disabled={m.isPending}>Save</button>
       </div>
     </Modal>
+  );
+}
+
+function SupportBanner({ issueId, issueTitle, mine }: { issueId: number; issueTitle: string; mine: MySupport }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={clsx("rounded-xl border p-4", mine ? "border-emerald-200 bg-emerald-50" : "border-brand-200 bg-brand-50")}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm">
+          {mine === "PUBLIC" && (
+            <>
+              <p className="font-medium text-emerald-900">You raised this issue publicly</p>
+              <p className="text-emerald-800">{user?.full_name} ({user?.roll_number}) is listed on this issue.</p>
+            </>
+          )}
+          {mine === "PRIVATE" && (
+            <>
+              <p className="font-medium text-emerald-900">You raised this issue privately</p>
+              <p className="text-emerald-800">You&apos;re counted, but only COSA can see your name.</p>
+            </>
+          )}
+          {!mine && (
+            <>
+              <p className="font-medium text-brand-900">Facing this too?</p>
+              <p className="text-brand-800">Raise it too, publicly with your name and roll number, or privately.</p>
+            </>
+          )}
+        </div>
+        <button onClick={() => setOpen(true)} className={clsx("shrink-0", mine ? "btn-secondary" : "btn-primary")}>
+          {mine ? <Settings2 className="h-4 w-4" /> : <Hand className="h-4 w-4" />}
+          {mine ? "Change" : "Raise this issue"}
+        </button>
+      </div>
+      {open && <SupportModal issueId={issueId} issueTitle={issueTitle} current={mine} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+const BRANCH_SHORT: Record<string, string> = { CSE: "CSE", MNC: "MnC", AIDS: "AI & DS" };
+const PREVIEW = 12;
+
+function SupportersCard({ issueId, total, canExport }: { issueId: number; total: number; canExport: boolean }) {
+  const [showAll, setShowAll] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const { data, isLoading } = useQuery({
+    queryKey: ["supporters", issueId],
+    queryFn: () => api<SupportersResponse>(`/api/issues/${issueId}/supporters/`),
+  });
+  const list = data?.results ?? [];
+  const shown = showAll ? list : list.slice(0, PREVIEW);
+
+  async function download() {
+    setDownloading(true);
+    setError(null);
+    try {
+      await downloadFile(`/api/issues/${issueId}/supporters/export/`, `issue-${issueId}-students.xlsx`);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <section className="card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+          <Users className="h-5 w-5 text-brand-700" /> Students on this issue
+          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">{data ? data.total : total}</span>
+        </h2>
+        {canExport && (
+          <button className="btn-secondary px-3 py-1.5" onClick={download} disabled={downloading}>
+            {downloading ? <Spinner className="h-4 w-4" /> : <Download className="h-4 w-4" />} Download sheet (.xlsx)
+          </button>
+        )}
+      </div>
+      <ErrorBox error={error} />
+      {isLoading ? (
+        <div className="py-4"><Spinner /></div>
+      ) : (
+        <>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {shown.map((s) => (
+              <li key={`${s.role}-${s.id}`} className="flex items-center gap-3 rounded-lg border border-slate-100 px-3 py-2">
+                <Avatar user={{ full_name: s.full_name, avatar_url: s.avatar_url, email: null }} size="sm" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-slate-900">
+                    {s.full_name || "Student"} <span className="font-mono text-xs text-brand-700">({s.roll_number || "—"})</span>
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    {[BRANCH_SHORT[s.branch] || "", s.year_of_study ? `Year ${s.year_of_study}` : ""].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+                {s.role === "RAISED" && <span className="chip bg-amber-100 text-amber-800">First raised</span>}
+                {s.is_private && (
+                  <span className="chip bg-slate-100 text-slate-600" title="Hidden from other students">
+                    <EyeOff className="h-3 w-3" /> Private
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {data && data.private_hidden > 0 && (
+            <p className="mt-3 flex items-center gap-1.5 text-sm text-slate-500">
+              <EyeOff className="h-4 w-4" /> + {data.private_hidden} student{data.private_hidden === 1 ? "" : "s"} raised it privately
+            </p>
+          )}
+          {list.length > PREVIEW && (
+            <button className="mt-3 text-sm font-medium text-brand-700 hover:underline" onClick={() => setShowAll((v) => !v)}>
+              {showAll ? "Show fewer" : `Show all ${list.length} students`}
+            </button>
+          )}
+        </>
+      )}
+    </section>
   );
 }

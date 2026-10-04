@@ -14,17 +14,15 @@ npm install          # first time only
 npm run dev          # http://localhost:3000
 ```
 
-Log in with the **Development login** box. Its quick buttons are Student,
-Gen Sec 1, President and Mess Secretary. Any `@students.iiitr.ac.in` email
-works and is created as a new student.
+Sign in with your IIITR Google account. First-time students fill in their
+profile before they can use the portal.
 
 ## Settings (`.env.local`)
 
 | Variable | Meaning |
 | --- | --- |
 | `NEXT_PUBLIC_API_URL` | Backend address, default `http://127.0.0.1:8000` |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth client ID. Set it to show the "Sign in with Google" button. |
-| `NEXT_PUBLIC_ENABLE_DEV_LOGIN` | `true` shows the email-only login box (backend must have `DJANGO_DEBUG=true`) |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth client ID. Required: the only way to sign in. |
 
 The backend must allow this origin. `CORS_ALLOWED_ORIGINS` in `backend/.env`
 needs to include `http://localhost:3000`.
@@ -33,7 +31,7 @@ needs to include `http://localhost:3000`.
 
 | Route | Who | What |
 | --- | --- | --- |
-| `/login` | everyone | Google sign-in, plus dev login |
+| `/login` | everyone | Google sign-in |
 | `/board` | everyone | Kanban of all issues. COSA can drag cards to change status. Students get **Raise an issue**. |
 | `/issues/[id]` | everyone | Details, timeline of official updates + student remarks, history, actions by role |
 | `/my-issues` | students | "Issues by You", with Raise to President (after 5 days) and Reopen |
