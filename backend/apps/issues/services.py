@@ -115,7 +115,8 @@ def _save_attachments(issue, user, files, *, update=None, remark=None):
 # ---------------------------------------------------------------------------
 @transaction.atomic
 def create_issue(user, *, title, description, category, priority, tagged_member=None, files=None):
-    _ensure(perms.can_raise(user), "Only students can raise issues.")
+    _ensure(user.is_student, "Only students can raise issues.")
+    _ensure(user.profile_complete, "Complete your profile before raising an issue.")
     if not category.is_active:
         raise ValidationError({"category": "This category is not accepting issues."})
     if tagged_member is not None and not tagged_member.is_cosa:

@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* IIIT Raichur palette — built around the logo navy (#2B2A7A). */
+@theme {
+  --color-brand-50: #eef0fb;
+  --color-brand-100: #dfe2f6;
+  --color-brand-200: #c3c8ee;
+  --color-brand-300: #9ca3e0;
+  --color-brand-400: #6f77cc;
+  --color-brand-500: #4c52b4;
+  --color-brand-600: #3a3f9c;
+  --color-brand-700: #2f3283;
+  --color-brand-800: #2b2a7a;
+  --color-brand-900: #1f1e57;
+  --color-brand-950: #141338;
+
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body {
+  background: #f5f6fa;
+  color: #1e1f2e;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Small shared component classes (Tailwind v4 utilities) */
+@utility card {
+  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+}
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-brand-800 text-white hover:bg-brand-900;
+}
+@utility btn-secondary {
+  @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}
+@utility btn-danger {
+  @apply btn bg-rose-600 text-white hover:bg-rose-700;
+}
+@utility btn-ghost {
+  @apply btn text-slate-600 hover:bg-slate-100;
+}
+@utility input {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-200 focus:outline-none;
+}
+@utility label {
+  @apply mb-1 block text-sm font-medium text-slate-700;
+}
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+}

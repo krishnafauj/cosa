@@ -28,8 +28,8 @@ def owns_category(user, issue) -> bool:
 
 
 def can_raise(user) -> bool:
-    """Only students raise issues. COSA members cannot."""
-    return user.is_student
+    """Only students raise issues (COSA members cannot), after completing their profile."""
+    return user.is_student and user.profile_complete
 
 
 def can_assign(user) -> bool:

@@ -1,3 +1,6 @@
+import os
+import uuid
+
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.cache import cache
 from django.db import models
@@ -32,6 +35,11 @@ class UserManager(BaseUserManager):
         return self._create_user(email, password, **extra)
 
 
+def profile_photo_path(instance, filename):
+    ext = os.path.splitext(filename)[1].lower()[:10]
+    return f"profiles/{uuid.uuid4().hex}{ext}"
+
+
 class User(AbstractBaseUser, PermissionsMixin):
     """A portal user. Identity is the college email; login is via Google."""
 
@@ -46,6 +54,20 @@ class User(AbstractBaseUser, PermissionsMixin):
     avatar_url = models.URLField(blank=True)
     user_type = models.CharField(max_length=10, choices=UserType.choices, default=UserType.STUDENT)
     roll_number = models.CharField(max_length=30, blank=True)
+
+    # ----- student profile (filled on first login) ------------------------
+    class Branch(models.TextChoices):
+        CSE = "CSE", "Computer Science and Engineering"
+        MNC = "MNC", "Mathematics and Computing"
+        AIDS = "AIDS", "Artificial Intelligence and Data Science"
+
+    photo = models.ImageField(upload_to=profile_photo_path, null=True, blank=True)
+    branch = models.CharField(max_length=4, choices=Branch.choices, blank=True)
+    batch_year = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Year of joining, e.g. 2023")
+    semester = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Current semester, 1-8")
+    about = models.TextField(max_length=500, blank=True)
+    profile_completed_at = models.DateTimeField(null=True, blank=True)
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
@@ -62,6 +84,20 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.full_name or self.email
+
+    # ----- profile helpers ------------------------------------------------
+    STUDENT_PROFILE_FIELDS = ("full_name", "roll_number", "branch", "batch_year", "semester")
+
+    @property
+    def profile_complete(self) -> bool:
+        """Students must fill their profile once; others don't need to."""
+        if self.user_type != self.UserType.STUDENT:
+            return True
+        return all(getattr(self, f) for f in self.STUDENT_PROFILE_FIELDS) and bool(self.photo)
+
+    @property
+    def year_of_study(self):
+        return (self.semester + 1) // 2 if self.semester else None
 
     # ----- role helpers ---------------------------------------------------
     @cached_property

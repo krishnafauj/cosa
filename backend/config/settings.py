@@ -142,6 +142,16 @@ AUTH_PASSWORD_VALIDATORS = [
 # College login rules
 ALLOWED_EMAIL_DOMAINS = env_list("ALLOWED_EMAIL_DOMAINS", "iiitr.ac.in,students.iiitr.ac.in")
 STUDENT_EMAIL_DOMAIN = os.getenv("STUDENT_EMAIL_DOMAIN", "students.iiitr.ac.in")
+# Student emails on the main domain look like cs23b1036@iiitr.ac.in:
+#   <branch code><2-digit join year><programme letter><number>
+STUDENT_EMAIL_REGEX = os.getenv(
+    "STUDENT_EMAIL_REGEX", r"^(?P<code>[a-z]{2})(?P<yy>\d{2})(?P<prog>[a-z])(?P<num>\d{3,5})@iiitr\.ac\.in$"
+)
+# Branch code in the roll number -> branch, used to pre-fill the profile form.
+# Add the other codes once confirmed, e.g. "cs:CSE,ad:AIDS,mc:MNC".
+ROLL_BRANCH_CODES = dict(
+    pair.split(":", 1) for pair in env_list("ROLL_BRANCH_CODES", "cs:CSE") if ":" in pair
+)
 GOOGLE_CLIENT_IDS = env_list("GOOGLE_CLIENT_IDS")
 # Dev-only email login (no Google) so the API can be exercised locally.
 ALLOW_DEV_LOGIN = env_bool("ALLOW_DEV_LOGIN", False) and DEBUG
@@ -195,8 +205,8 @@ SPECTACULAR_SETTINGS = {
 # ---------------------------------------------------------------------------
 # CORS / CSRF / security
 # ---------------------------------------------------------------------------
-CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
-CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

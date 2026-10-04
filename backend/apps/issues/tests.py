@@ -13,6 +13,14 @@ from apps.issues.models import Category, Issue
 from apps.notifications.models import Notification
 
 
+def make_student(email, name="Student"):
+    """A student who has already completed the first-login profile."""
+    return User.objects.create_user(
+        email, full_name=name, roll_number=email.split("@")[0].upper(), branch="CSE",
+        batch_year=2023, semester=5, photo="profiles/test.png",
+    )
+
+
 def client_for(user):
     c = APIClient()
     c.credentials(HTTP_AUTHORIZATION=f"Bearer {issue_tokens(user)['access']}")
@@ -23,8 +31,8 @@ class PortalFlowTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         call_command("seed_portal", verbosity=0)
-        cls.student = User.objects.create_user("alice@students.iiitr.ac.in", full_name="Alice")
-        cls.other_student = User.objects.create_user("bob@students.iiitr.ac.in", full_name="Bob")
+        cls.student = make_student("alice@students.iiitr.ac.in", "Alice")
+        cls.other_student = make_student("bob@students.iiitr.ac.in", "Bob")
         cls.gensec = User.objects.get(email="gensec_1@students.iiitr.ac.in")
         cls.president = User.objects.get(email="president@iiitr.ac.in")
         cls.mess_sec = User.objects.get(email="messsecretary@iiitr.ac.in")
@@ -48,6 +56,10 @@ class PortalFlowTests(TestCase):
     # ---- auth -------------------------------------------------------------
     def test_login_rules(self):
         self.assertEqual(resolve_login("new@students.iiitr.ac.in").user_type, "STUDENT")
+        roll = resolve_login("cs23b1036@iiitr.ac.in")  # roll-number email on the main domain
+        self.assertEqual(roll.user_type, "STUDENT")
+        self.assertEqual((roll.roll_number, roll.batch_year, roll.branch), ("CS23B1036", 2023, "CSE"))
+        self.assertFalse(roll.profile_complete)
         self.assertEqual(resolve_login("hss1@iiitr.ac.in").user_type, "COSA")
         with self.assertRaises(Exception):
             resolve_login("someone@gmail.com")
@@ -83,6 +95,36 @@ class PortalFlowTests(TestCase):
         self.assertTrue(Notification.objects.filter(recipient=self.gensec, kind="ISSUE_CREATED").exists())
         self.assertTrue(Notification.objects.filter(recipient=self.sports_sec, kind="ISSUE_TAGGED").exists())
         self.assertFalse(Notification.objects.filter(recipient=self.student).exists())
+
+    def test_first_login_profile(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from io import BytesIO
+        from PIL import Image
+
+        new = resolve_login("cs24b1001@iiitr.ac.in")
+        c = client_for(new)
+        me = c.get("/api/auth/me/").data
+        self.assertFalse(me["profile_complete"])
+        # can't raise an issue before the profile is complete
+        r = c.post("/api/issues/", {"title": "x", "description": "y", "category": self.mess.pk}, format="json")
+        self.assertEqual(r.status_code, 403)
+        # roll number from the email can't be changed
+        r = c.patch("/api/auth/me/", {"roll_number": "XX99"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        buf = BytesIO()
+        Image.new("RGB", (10, 10), "navy").save(buf, "PNG")
+        photo = SimpleUploadedFile("me.png", buf.getvalue(), content_type="image/png")
+        with self.settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+                                     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}):
+            r = c.patch("/api/auth/me/", {"full_name": "Krishna", "branch": "CSE", "semester": 3,
+                                          "batch_year": 2024, "about": "Hi", "photo": photo}, format="multipart")
+            self.assertEqual(r.status_code, 200, r.data)
+            self.assertTrue(r.data["profile_complete"])
+            self.assertEqual(r.data["year_of_study"], 2)
+            self.assertEqual(r.data["branch_label"], "Computer Science and Engineering")
+            self.assertTrue(r.data["avatar_url"])
+        new.refresh_from_db()
+        self.assertIsNotNone(new.profile_completed_at)
 
     def test_cosa_cannot_raise(self):
         r = client_for(self.gensec).post(
@@ -216,8 +258,8 @@ class CosaTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         call_command("seed_portal", verbosity=0)
-        cls.student = User.objects.create_user("alice@students.iiitr.ac.in")
-        cls.head = User.objects.create_user("head@students.iiitr.ac.in")
+        cls.student = make_student("alice@students.iiitr.ac.in")
+        cls.head = make_student("head@students.iiitr.ac.in")
         cls.cult = User.objects.get(email="cult@students.iiitr.ac.in")
         cls.gensec = User.objects.get(email="gensec_2@students.iiitr.ac.in")
 

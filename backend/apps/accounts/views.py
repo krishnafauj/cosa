@@ -4,6 +4,7 @@ from google.oauth2 import id_token as google_id_token
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import AuthenticationFailed, NotFound
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -109,8 +110,11 @@ class LogoutView(APIView):
 
 
 class MeView(generics.RetrieveUpdateAPIView):
+    """GET the current user. PATCH updates the profile (multipart for the photo)."""
+
     serializer_class = MeSerializer
     http_method_names = ["get", "patch"]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_object(self):
         return self.request.user
