@@ -51,7 +51,7 @@ export default function NotificationsPage() {
     filter === "unread" ? { is_read: "false" } : filter === "issues" ? { target_type: "issue" } : {};
     
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["notifications", filter],
+    queryKey: ["notifications-infinite", filter],
     queryFn: ({ pageParam = 1 }) => api<Paginated<Notification>>(`/api/notifications/${qs({ ...params, page_size: 20, page: pageParam })}`),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {

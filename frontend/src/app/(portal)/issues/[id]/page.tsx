@@ -472,7 +472,7 @@ function SupportersCard({ issueId, total, canExport }: { issueId: number; total:
   const [error, setError] = useState<unknown>(null);
   
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["supporters", issueId],
+    queryKey: ["supporters-infinite", issueId],
     queryFn: ({ pageParam = 1 }) => api<SupportersResponse>(`/api/issues/${issueId}/supporters/?page=${pageParam}`),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.next,

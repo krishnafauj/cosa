@@ -20,7 +20,7 @@ export default function EventsPage() {
 
   const clubs = useQuery({ queryKey: ["clubs"], queryFn: () => api<Paginated<Club>>("/api/cosa/clubs/?page_size=100") });
   const events = useInfiniteQuery({
-    queryKey: ["events", when, club],
+    queryKey: ["events-infinite", when, club],
     queryFn: ({ pageParam = 1 }) => api<Paginated<CampusEvent>>(`/api/cosa/events/${qs({ when, club, page_size: 20, page: pageParam })}`),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
