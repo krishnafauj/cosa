@@ -108,7 +108,7 @@ class IssueViewSet(
     """Issues. There is deliberately no DELETE."""
 
     filterset_class = IssueFilter
-    search_fields = ["title", "description"]
+    search_fields = ["title", "description", "created_by__full_name", "created_by__roll_number"]
     ordering_fields = ["id", "title", "status", "created_at", "updated_at", "priority", "upvote_count"]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     http_method_names = ["get", "post", "patch", "head", "options"]

@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { Loader2, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { initials, PRIORITY_META, STATUS_META } from "@/lib/format";
 import type { IssueStatus, Priority, UserBrief } from "@/lib/types";
 
@@ -41,12 +41,15 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
 
 export function Avatar({ user, size = "md" }: { user: Pick<UserBrief, "full_name" | "avatar_url" | "email"> | null; size?: "sm" | "md" | "lg" }) {
   const dims = { sm: "h-6 w-6 text-[10px]", md: "h-8 w-8 text-xs", lg: "h-11 w-11 text-sm" }[size];
-  if (user?.avatar_url) {
+  // If the photo URL is dead (e.g. a file lost on redeploy), fall back to initials instead of a broken image.
+  const [broken, setBroken] = useState<string | null>(null);
+  if (user?.avatar_url && broken !== user.avatar_url) {
+    const src = user.avatar_url;
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={user.avatar_url} alt="" className={clsx(dims, "rounded-full object-cover ring-2 ring-white")} />;
+    return <img src={src} alt="" onError={() => setBroken(src)} className={clsx(dims, "shrink-0 rounded-full object-cover ring-2 ring-white")} />;
   }
   return (
-    <span className={clsx(dims, "inline-flex items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-800 ring-2 ring-white")}>
+    <span className={clsx(dims, "inline-flex shrink-0 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-800 ring-2 ring-white")}>
       {initials(user?.full_name || user?.email)}
     </span>
   );
@@ -133,13 +136,17 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; onChange: (v: T) => void; tabs: { value: T; label: string; count?: number }[] }) {
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200">
+    <div
+      // Grey baseline is an inset shadow (not a border + -mb-px overlap), so nothing overflows
+      // vertically; tabs still scroll sideways on small screens with the scrollbar hidden.
+      className="mb-5 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-slate-200)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {tabs.map((t) => (
         <button
           key={t.value}
           onClick={() => onChange(t.value)}
           className={clsx(
-            "-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+            "shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
             value === t.value ? "border-brand-800 text-brand-800" : "border-transparent text-slate-500 hover:text-slate-800",
           )}
         >

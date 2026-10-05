@@ -116,7 +116,6 @@ export default function IssuePage() {
                 {timelineQ.data?.length === 0 && <p className="text-sm text-slate-500">No updates yet.</p>}
                 {timelineQ.data?.map((item) => <TimelineEntry key={`${item.kind}-${item.data.id}`} item={item} />)}
                 {p.can_post_update && <UpdateComposer issueId={issueId} onDone={refresh} />}
-                {p.can_remark && <RemarkComposer issueId={issueId} onDone={refresh} />}
               </div>
             ) : (
               <HistoryList events={historyQ.data} loading={historyQ.isLoading} />
@@ -164,7 +163,7 @@ export default function IssuePage() {
             <Detail label="Raised by"><UserLine user={issue.created_by} /></Detail>
             <Detail label="Assigned to">
               {issue.assignees.length ? (
-                <div className="space-y-1.5">{issue.assignees.map((a) => <UserLine key={a.id} user={a} />)}</div>
+                <div className="flex flex-col gap-1.5">{issue.assignees.map((a) => <UserLine key={a.id} user={a} />)}</div>
               ) : (
                 <span className="text-slate-400 italic">Not assigned yet</span>
               )}
@@ -172,11 +171,14 @@ export default function IssuePage() {
             <Detail label="Faculty"><UserLine user={issue.faculty} /></Detail>
             {issue.tagged_members?.length > 0 && (
               <Detail label="Tagged">
-                <div className="space-y-1.5">{issue.tagged_members.map((u) => <UserLine key={u.id} user={u} />)}</div>
+                <div className="flex flex-col gap-1.5">{issue.tagged_members.map((u) => <UserLine key={u.id} user={u} />)}</div>
               </Detail>
             )}
             <Detail label="Last updated">{timeAgo(issue.updated_at)}</Detail>
           </div>
+
+          {/* Student who raised it: remark box sits under the details, always in view. */}
+          {p.can_remark && <RemarkComposer issueId={issueId} onDone={refresh} />}
         </aside>
       </div>
 
@@ -326,7 +328,7 @@ function RemarkComposer({ issueId, onDone }: { issueId: number; onDone: () => vo
       <ErrorBox error={m.error} />
       <textarea
         id="rem-body"
-        className="input min-h-20"
+        className="input min-h-28"
         maxLength={500}
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -334,9 +336,9 @@ function RemarkComposer({ issueId, onDone }: { issueId: number; onDone: () => vo
         placeholder={remaining === 0 ? "Daily limit reached — you can add more tomorrow." : "Any new details, or is it fixed?"}
         required
       />
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2 flex flex-col gap-2">
         <span className="text-xs text-slate-400">{body.length}/500 · {remaining} left today</span>
-        <button className="btn-primary" disabled={m.isPending || remaining === 0}>{m.isPending && <Spinner className="h-4 w-4 text-white" />} Add remark</button>
+        <button className="btn-primary w-full" disabled={m.isPending || remaining === 0}>{m.isPending && <Spinner className="h-4 w-4 text-white" />} Add remark</button>
       </div>
     </form>
   );

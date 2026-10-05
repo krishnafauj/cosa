@@ -1,19 +1,19 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, EyeOff, Minimize2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, EyeOff, Minimize2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { api, downloadFile, qs } from "@/lib/api";
+import { downloadFile, qs } from "@/lib/api";
+import { LoadMore, useDebounced, useInfiniteList } from "@/lib/infinite";
 import { useAuth } from "@/lib/auth";
 import { STATUS_META, STATUS_ORDER, formatDateTime, timeAgo } from "@/lib/format";
-import type { IssueRow, IssueStatus, LatestNote, Paginated, UserBrief } from "@/lib/types";
+import type { IssueRow, IssueStatus, LatestNote, UserBrief } from "@/lib/types";
 import { StudentCount } from "./support";
 import { Avatar, ErrorBox, PriorityBadge, Spinner, StatusBadge } from "./ui";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 30;
 
 type SortKey = "id" | "title" | "status" | "priority" | "upvote_count" | "created_at" | "updated_at";
 
@@ -50,33 +50,67 @@ function Note({ note, kind }: { note: LatestNote | null; kind: "update" | "remar
  * Full-screen table of every issue. Opened from the expand icon on the board
  * (optionally pre-filtered to one status column). Uses the board's filters.
  */
+export type TableState = { status: IssueStatus | ""; search: string; sort: string };
+
+const SORT_KEYS: SortKey[] = ["id", "title", "status", "priority", "upvote_count", "created_at", "updated_at"];
+
+/** "-updated_at" -> { key: "updated_at", desc: true }; falls back to newest-updated first. */
+function parseSort(value: string | undefined): { key: SortKey; desc: boolean } {
+  const desc = !!value?.startsWith("-");
+  const key = (value || "").replace(/^-/, "") as SortKey;
+  return SORT_KEYS.includes(key) ? { key, desc } : { key: "updated_at", desc: true };
+}
+
 export function IssueTableOverlay({
   filters,
-  initialStatus,
+  initial,
+  onChange,
   onClose,
 }: {
   filters: Record<string, string>;
-  initialStatus: IssueStatus | "";
+  /** Starting tab / search / sort (e.g. read from the URL). */
+  initial: Partial<TableState>;
+  /** Called whenever tab / search / sort change, so the page can mirror them in the URL. */
+  onChange?: (state: TableState) => void;
   onClose: () => void;
 }) {
   const { user } = useAuth();
   const router = useRouter();
-  const [status, setStatus] = useState<IssueStatus | "">(initialStatus);
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "updated_at", desc: true });
-  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState<IssueStatus | "">(initial.status ?? "");
+  const [sort, setSort] = useState(() => parseSort(initial.sort));
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<unknown>(null);
+  const [searchInput, setSearchInput] = useState(initial.search ?? filters.search ?? "");
+  const search = useDebounced(searchInput.trim());
+  const ordering = `${sort.desc ? "-" : ""}${sort.key}`;
 
-  const params = { ...filters, status, ordering: `${sort.desc ? "-" : ""}${sort.key}` };
-  const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ["issue-table", params, page],
-    queryFn: () => api<Paginated<IssueRow>>(`/api/issues/table/${qs({ ...params, page, page_size: PAGE_SIZE })}`),
-    placeholderData: keepPreviousData,
-  });
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.({ status, search, sort: ordering });
+  }, [status, search, ordering]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Board filters + this view's own status tab and search box.
+  const listFilters = { ...filters, search, status };
+  const { items, count, isLoading, isFetching, error, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useInfiniteList<IssueRow>(
+      ["issue-table"],
+      "/api/issues/table/",
+      { ...listFilters, ordering },
+      PAGE_SIZE,
+    );
+
+  // New status / search / sort = new list: jump back to the top.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [status, search, sort.key, sort.desc]);
 
   // Close on Escape and stop the page behind from scrolling.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseRef.current();
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -84,11 +118,8 @@ export function IssueTableOverlay({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose]);
+  }, []);
 
-  useEffect(() => setPage(1), [status, sort.key, sort.desc]);
-
-  const pages = data ? Math.max(1, Math.ceil(data.count / PAGE_SIZE)) : 1;
 
   function Th({ k, children, className }: { k?: SortKey; children: React.ReactNode; className?: string }) {
     const active = k && sort.key === k;
@@ -114,8 +145,8 @@ export function IssueTableOverlay({
       {/* Top bar */}
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3">
         <h2 className="text-lg font-semibold text-slate-900">All issues</h2>
-        <span className="text-sm text-slate-500">{data ? `${data.count} total` : ""}</span>
-        {isFetching && !isLoading && <Spinner className="h-4 w-4" />}
+        <span className="text-sm text-slate-500">{isLoading ? "" : `${count} ${status ? STATUS_META[status].label.toLowerCase() : "total"}`}</span>
+        {isFetching && !isLoading && !isFetchingNextPage && <Spinner className="h-4 w-4" />}
         <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
           {(["", ...STATUS_ORDER] as const).map((s) => (
             <button
@@ -131,7 +162,17 @@ export function IssueTableOverlay({
             </button>
           ))}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute top-2.5 left-3 h-4 w-4 text-slate-400" />
+            <input
+              className="input pl-9"
+              placeholder={`Search ${status ? STATUS_META[status].label : "all issues"}`}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search issues"
+            />
+          </div>
           {user?.is_cosa && (
             <button
               className="btn-secondary"
@@ -140,7 +181,7 @@ export function IssueTableOverlay({
                 setExporting(true);
                 setExportError(null);
                 try {
-                  await downloadFile(`/api/issues/export/${qs({ ...filters, status })}`, "issues.xlsx");
+                  await downloadFile(`/api/issues/export/${qs(listFilters)}`, "issues.xlsx");
                 } catch (e) {
                   setExportError(e);
                 } finally {
@@ -160,7 +201,7 @@ export function IssueTableOverlay({
       <div className="px-4 pt-2"><ErrorBox error={error || exportError} /></div>
 
       {/* Table: scrolls both ways, header sticks */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center"><Spinner className="h-6 w-6" /></div>
         ) : (
@@ -183,7 +224,7 @@ export function IssueTableOverlay({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data?.results.map((r) => (
+              {items.map((r) => (
                 <tr
                   key={r.id}
                   className="cursor-pointer align-top hover:bg-brand-50/40"
@@ -222,25 +263,20 @@ export function IssueTableOverlay({
                   <td className="px-3 py-3 text-xs whitespace-nowrap text-slate-500" title={formatDateTime(r.updated_at)}>{timeAgo(r.updated_at)}</td>
                 </tr>
               ))}
-              {data && data.results.length === 0 && (
+              {items.length === 0 && (
                 <tr><td colSpan={13} className="px-3 py-12 text-center text-slate-400">No issues match these filters.</td></tr>
               )}
             </tbody>
           </table>
         )}
+        {!isLoading && (
+          <LoadMore root={scrollRef} hasMore={!!hasNextPage} loading={isFetchingNextPage} onLoad={() => fetchNextPage()} />
+        )}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between border-t border-slate-200 px-4 py-2 text-sm text-slate-600">
-        <span>Page {page} of {pages}</span>
-        <div className="flex gap-1">
-          <button className="btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page">
-            <ChevronLeft className="h-4 w-4" /> Prev
-          </button>
-          <button className="btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} aria-label="Next page">
-            Next <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+      <div className="border-t border-slate-200 px-4 py-2 text-xs text-slate-500">
+        Showing {items.length} of {count}
+        {hasNextPage ? " — scroll down to load more" : ""}
       </div>
     </div>
   );
