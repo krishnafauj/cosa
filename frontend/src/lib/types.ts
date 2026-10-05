@@ -302,5 +302,7 @@ export interface Supporter {
 export interface SupportersResponse {
   total: number;
   private_hidden: number;
+  next: number | null;
+  previous: number | null;
   results: Supporter[];
 }

@@ -310,8 +310,29 @@ class IssueViewSet(
                 private_hidden += 1
                 continue
             rows.append({"user": u.user, "role": "SUPPORTER", "is_private": u.is_private, "joined_at": u.created_at})
-        data = SupporterSerializer(rows, many=True, context=self.get_serializer_context()).data
-        return Response({"total": len(rows) + private_hidden, "private_hidden": private_hidden, "results": data})
+        
+        try:
+            page = int(request.query_params.get('page', 1))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(request.query_params.get('page_size', 20))
+        except ValueError:
+            page_size = 20
+            
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        paginated_rows = rows[start:end]
+        data = SupporterSerializer(paginated_rows, many=True, context=self.get_serializer_context()).data
+        
+        return Response({
+            "total": len(rows) + private_hidden, 
+            "private_hidden": private_hidden,
+            "next": page + 1 if end < len(rows) else None,
+            "previous": page - 1 if page > 1 else None,
+            "results": data
+        })
 
     @extend_schema(responses={(200, exports.XLSX): bytes})
     @action(detail=True, methods=["get"], url_path="supporters/export")

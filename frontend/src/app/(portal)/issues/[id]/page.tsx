@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import {
   AlertTriangle,
@@ -468,15 +468,19 @@ const BRANCH_SHORT: Record<string, string> = { CSE: "CSE", MNC: "MnC", AIDS: "AI
 const PREVIEW = 12;
 
 function SupportersCard({ issueId, total, canExport }: { issueId: number; total: number; canExport: boolean }) {
-  const [showAll, setShowAll] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const { data, isLoading } = useQuery({
+  
+  const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["supporters", issueId],
-    queryFn: () => api<SupportersResponse>(`/api/issues/${issueId}/supporters/`),
+    queryFn: ({ pageParam = 1 }) => api<SupportersResponse>(`/api/issues/${issueId}/supporters/?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.next,
   });
-  const list = data?.results ?? [];
-  const shown = showAll ? list : list.slice(0, PREVIEW);
+
+  const list = data?.pages.flatMap((page) => page.results) ?? [];
+  const totalCount = data?.pages[0]?.total ?? total;
+  const privateHidden = data?.pages[0]?.private_hidden ?? 0;
 
   async function download() {
     setDownloading(true);
@@ -495,7 +499,7 @@ function SupportersCard({ issueId, total, canExport }: { issueId: number; total:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-semibold text-slate-900">
           <Users className="h-5 w-5 text-brand-700" /> Students on this issue
-          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">{data ? data.total : total}</span>
+          <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-800">{totalCount}</span>
         </h2>
         {canExport && (
           <button className="btn-secondary px-3 py-1.5" onClick={download} disabled={downloading}>
@@ -508,8 +512,8 @@ function SupportersCard({ issueId, total, canExport }: { issueId: number; total:
         <div className="py-4"><Spinner /></div>
       ) : (
         <>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-            {shown.map((s) => (
+          <ul className="mt-4 grid max-h-[500px] gap-2 overflow-y-auto pr-2 sm:grid-cols-2">
+            {list.map((s) => (
               <li key={`${s.role}-${s.id}`} className="flex items-center gap-3 rounded-lg border border-slate-100 px-3 py-2">
                 <Avatar user={{ full_name: s.full_name, avatar_url: s.avatar_url, email: null }} size="sm" />
                 <span className="min-w-0 flex-1">
@@ -528,16 +532,22 @@ function SupportersCard({ issueId, total, canExport }: { issueId: number; total:
                 )}
               </li>
             ))}
+            {hasNextPage && (
+              <li className="col-span-1 flex justify-center py-3 sm:col-span-2">
+                <button
+                  className="text-sm font-medium text-brand-700 hover:underline disabled:opacity-50"
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? "Loading more..." : "Load more students"}
+                </button>
+              </li>
+            )}
           </ul>
-          {data && data.private_hidden > 0 && (
+          {privateHidden > 0 && (
             <p className="mt-3 flex items-center gap-1.5 text-sm text-slate-500">
-              <EyeOff className="h-4 w-4" /> + {data.private_hidden} student{data.private_hidden === 1 ? "" : "s"} raised it privately
+              <EyeOff className="h-4 w-4" /> + {privateHidden} student{privateHidden === 1 ? "" : "s"} raised it privately
             </p>
-          )}
-          {list.length > PREVIEW && (
-            <button className="mt-3 text-sm font-medium text-brand-700 hover:underline" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show fewer" : `Show all ${list.length} students`}
-            </button>
           )}
         </>
       )}
