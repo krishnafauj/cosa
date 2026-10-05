@@ -24,6 +24,7 @@ export function useInfiniteList<T>(key: QueryKey, path: string, params: Params, 
     initialPageParam: 1,
     queryFn: ({ pageParam }) => api<Paginated<T>>(`${path}${qs({ ...params, page: pageParam, page_size: pageSize })}`),
     getNextPageParam: (last) => nextPage(last.next),
+    refetchInterval: 60000,
   });
   const items = query.data?.pages.flatMap((p) => p.results) ?? [];
   const count = query.data?.pages[0]?.count ?? 0;
