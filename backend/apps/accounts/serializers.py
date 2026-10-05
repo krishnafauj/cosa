@@ -25,7 +25,7 @@ class UserBriefSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "email", "user_type", "role_name", "avatar_url", "branch", "year_of_study"]
+        fields = ["id", "full_name", "email", "user_type", "role_name", "avatar_url", "roll_number", "branch", "year_of_study"]
 
     def get_avatar_url(self, obj) -> str:
         return picture_url(obj, self.context.get("request"))

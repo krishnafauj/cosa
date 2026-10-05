@@ -92,7 +92,8 @@ export function RaiseIssueModal({ open, onClose }: { open: boolean; onClose: () 
   const { data: cosa } = useUserSearch("", "COSA");
   const qc = useQueryClient();
   const router = useRouter();
-  const [form, setForm] = useState({ title: "", description: "", category: "", priority: "MEDIUM", tagged_member: "" });
+  const [form, setForm] = useState({ title: "", description: "", category: "", priority: "MEDIUM" });
+  const [tagged, setTagged] = useState<number[]>([]);
   const [files, setFiles] = useState<File[]>([]);
 
   const mutation = useMutation({
@@ -102,14 +103,15 @@ export function RaiseIssueModal({ open, onClose }: { open: boolean; onClose: () 
       fd.set("description", form.description);
       fd.set("category", form.category);
       fd.set("priority", form.priority);
-      if (form.tagged_member) fd.set("tagged_member", form.tagged_member);
+      tagged.forEach((id) => fd.append("tagged_members", String(id)));
       files.forEach((f) => fd.append("attachments", f));
       return api<IssueDetail>("/api/issues/", { method: "POST", body: fd });
     },
     onSuccess: (issue) => {
       qc.invalidateQueries({ queryKey: ["board"] });
       qc.invalidateQueries({ queryKey: ["my-issues"] });
-      setForm({ title: "", description: "", category: "", priority: "MEDIUM", tagged_member: "" });
+      setForm({ title: "", description: "", category: "", priority: "MEDIUM" });
+      setTagged([]);
       setFiles([]);
       onClose();
       router.push(`/issues/${issue.id}`);
@@ -168,13 +170,43 @@ export function RaiseIssueModal({ open, onClose }: { open: boolean; onClose: () 
           </div>
         </div>
         <div>
-          <label className="label" htmlFor="tag">Tag a COSA member <span className="font-normal text-slate-400">(optional)</span></label>
-          <select id="tag" className="input" value={form.tagged_member} onChange={set("tagged_member")}>
-            <option value="">No one — COSA will assign it</option>
-            {cosa?.results.map((u) => (
-              <option key={u.id} value={u.id}>{u.role_name || u.full_name}</option>
-            ))}
-          </select>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <span className="label !mb-0">
+              Tag COSA members <span className="font-normal text-slate-400">(optional, pick any number)</span>
+            </span>
+            {tagged.length > 0 && (
+              <button type="button" className="text-xs font-medium text-brand-700 hover:underline" onClick={() => setTagged([])}>
+                Clear ({tagged.length})
+              </button>
+            )}
+          </div>
+          <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-slate-200 p-2">
+            {!cosa ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              cosa.results.map((u) => {
+                const on = tagged.includes(u.id);
+                return (
+                  <button
+                    type="button"
+                    key={u.id}
+                    aria-pressed={on}
+                    onClick={() => setTagged((t) => (on ? t.filter((x) => x !== u.id) : [...t, u.id]))}
+                    className={clsx(
+                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+                      on ? "border-brand-500 bg-brand-50 text-brand-800" : "border-slate-200 text-slate-600 hover:border-slate-300",
+                    )}
+                  >
+                    {on && <Check className="h-3.5 w-3.5" />}
+                    {u.role_name || u.full_name}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            {tagged.length ? `${tagged.length} tagged — they'll be notified.` : "No one tagged — COSA will assign it."}
+          </p>
         </div>
         <div>
           <span className="label">Attachments <span className="font-normal text-slate-400">(up to 3 images or PDFs, 5 MB each)</span></span>

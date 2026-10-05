@@ -68,6 +68,36 @@ class IssueListSerializer(serializers.ModelSerializer):
         return "PRIVATE" if value else "PUBLIC"
 
 
+class IssueTableSerializer(IssueListSerializer):
+    """One row of the table view: card fields + tags, faculty and the latest update / remark."""
+
+    tagged_members = UserBriefSerializer(many=True, read_only=True)
+    faculty = UserBriefSerializer(read_only=True)
+    last_update = serializers.SerializerMethodField()
+    last_remark = serializers.SerializerMethodField()
+
+    class Meta(IssueListSerializer.Meta):
+        fields = IssueListSerializer.Meta.fields + ["tagged_members", "faculty", "last_update", "last_remark"]
+
+    @staticmethod
+    def _latest(obj, prefix):
+        body = getattr(obj, f"{prefix}_body", None)
+        if body is None:
+            return None
+        return {
+            "body": body,
+            "author": getattr(obj, f"{prefix}_author", "") or "",
+            "created_at": getattr(obj, f"{prefix}_at", None),
+            **({"type": getattr(obj, f"{prefix}_type", None)} if prefix == "_lr" else {}),
+        }
+
+    def get_last_update(self, obj) -> dict | None:
+        return self._latest(obj, "_lu")
+
+    def get_last_remark(self, obj) -> dict | None:
+        return self._latest(obj, "_lr")
+
+
 class MyIssueSerializer(IssueListSerializer):
     """'Issues by you' — adds escalate/reopen availability."""
 
@@ -94,7 +124,7 @@ class MyIssueSerializer(IssueListSerializer):
 
 
 class IssueDetailSerializer(IssueListSerializer):
-    tagged_member = UserBriefSerializer(read_only=True)
+    tagged_members = UserBriefSerializer(many=True, read_only=True)
     faculty = UserBriefSerializer(read_only=True)
     attachments = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
@@ -104,7 +134,7 @@ class IssueDetailSerializer(IssueListSerializer):
     class Meta(IssueListSerializer.Meta):
         fields = IssueListSerializer.Meta.fields + [
             "description",
-            "tagged_member",
+            "tagged_members",
             "faculty",
             "escalated_at",
             "resolution",
@@ -137,8 +167,8 @@ class IssueCreateSerializer(serializers.Serializer):
     description = serializers.CharField(max_length=2000)
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.filter(is_active=True))
     priority = serializers.ChoiceField(choices=Issue.Priority.choices, default=Issue.Priority.MEDIUM)
-    tagged_member = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.filter(is_active=True), required=False, allow_null=True
+    tagged_members = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True), many=True, required=False
     )
     attachments = serializers.ListField(
         child=serializers.FileField(), required=False, allow_empty=True, write_only=True

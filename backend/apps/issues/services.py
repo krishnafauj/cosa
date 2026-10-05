@@ -114,13 +114,14 @@ def _save_attachments(issue, user, files, *, update=None, remark=None):
 # create / edit
 # ---------------------------------------------------------------------------
 @transaction.atomic
-def create_issue(user, *, title, description, category, priority, tagged_member=None, files=None):
+def create_issue(user, *, title, description, category, priority, tagged_members=None, files=None):
     _ensure(user.is_student, "Only students can raise issues.")
     _ensure(user.profile_complete, "Complete your profile before raising an issue.")
     if not category.is_active:
         raise ValidationError({"category": "This category is not accepting issues."})
-    if tagged_member is not None and not tagged_member.is_cosa:
-        raise ValidationError({"tagged_member": "You can only tag a COSA member."})
+    tagged_members = list({u.pk: u for u in (tagged_members or [])}.values())
+    if any(not u.is_cosa for u in tagged_members):
+        raise ValidationError({"tagged_members": "You can only tag COSA members."})
 
     issue = Issue.objects.create(
         title=title,
@@ -128,8 +129,9 @@ def create_issue(user, *, title, description, category, priority, tagged_member=
         category=category,
         priority=priority,
         created_by=user,
-        tagged_member=tagged_member,
     )
+    if tagged_members:
+        issue.tagged_members.set(tagged_members)
     _event(issue, user, "created", new=issue.title)
 
     # Auto-route to the category's secretaries.
@@ -143,8 +145,8 @@ def create_issue(user, *, title, description, category, priority, tagged_member=
     title_txt = f"New {category.name} issue: {issue.title}"
     notify(owners + gen_secs(), kind=Kind.ISSUE_CREATED, title=title_txt, actor=user,
            target_type="issue", target_id=issue.pk)
-    if tagged_member:
-        notify([tagged_member], kind=Kind.ISSUE_TAGGED, title=f"You were tagged: {issue.title}",
+    if tagged_members:
+        notify(tagged_members, kind=Kind.ISSUE_TAGGED, title=f"You were tagged: {issue.title}",
                actor=user, target_type="issue", target_id=issue.pk)
     return issue
 

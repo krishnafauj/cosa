@@ -89,7 +89,7 @@ class PortalFlowTests(TestCase):
 
     # ---- issues -----------------------------------------------------------
     def test_raise_auto_assigns_and_notifies(self):
-        data = self.raise_issue(tagged_member=self.sports_sec.pk)
+        data = self.raise_issue(tagged_members=[self.sports_sec.pk, self.gensec.pk])
         self.assertEqual([a["id"] for a in data["assignees"]], [self.mess_sec.pk])
         self.assertTrue(Notification.objects.filter(recipient=self.mess_sec, kind="ISSUE_CREATED").exists())
         self.assertTrue(Notification.objects.filter(recipient=self.gensec, kind="ISSUE_CREATED").exists())
@@ -296,6 +296,25 @@ class PortalFlowTests(TestCase):
         self.assertIn("Cold food", titles)
         self.assertEqual(client_for(self.student).get("/api/issues/export/").status_code, 403)
 
+    def test_table_view_and_multi_tags(self):
+        data = self.raise_issue(tagged_members=[self.sports_sec.pk, self.mess_sec.pk])
+        base = f"/api/issues/{data['id']}"
+        self.assertEqual(sorted(u["id"] for u in data["tagged_members"]), sorted([self.sports_sec.pk, self.mess_sec.pk]))
+        # Only COSA members can be tagged.
+        other = make_student("cs23b1099@iiitr.ac.in")
+        r = client_for(self.student).post("/api/issues/", {"title": "x", "description": "y", "category": self.mess.pk,
+                                                            "tagged_members": [other.pk]}, format="json")
+        self.assertEqual(r.status_code, 400)
+        client_for(self.mess_sec).post(f"{base}/updates/", {"body": "Talking to vendor"}, format="json")
+        client_for(self.student).post(f"{base}/remarks/", {"body": "Still cold"}, format="json")
+        r = client_for(self.gensec).get("/api/issues/table/?ordering=-updated_at")
+        self.assertEqual(r.status_code, 200)
+        row = r.data["results"][0]
+        self.assertEqual(row["last_update"]["body"], "Talking to vendor")
+        self.assertEqual(row["last_remark"]["body"], "Still cold")
+        self.assertEqual(row["created_by"]["roll_number"], self.student.roll_number)
+        self.assertEqual(len(row["tagged_members"]), 2)
+
     def test_board_and_dashboard(self):
         self.raise_issue()
         board = client_for(self.student).get("/api/issues/board/").data
@@ -320,7 +339,7 @@ class PortalFlowTests(TestCase):
             self.raise_issue()
         c = client_for(self.gensec)
         c.get("/api/issues/")  # warm role cache
-        with self.assertNumQueries(4):  # user, count, issues, assignees
+        with self.assertNumQueries(5):  # user, count, issues, assignees, tagged
             c.get("/api/issues/")
 
 

@@ -170,7 +170,11 @@ export default function IssuePage() {
               )}
             </Detail>
             <Detail label="Faculty"><UserLine user={issue.faculty} /></Detail>
-            {issue.tagged_member && <Detail label="Tagged"><UserLine user={issue.tagged_member} /></Detail>}
+            {issue.tagged_members?.length > 0 && (
+              <Detail label="Tagged">
+                <div className="space-y-1.5">{issue.tagged_members.map((u) => <UserLine key={u.id} user={u} />)}</div>
+              </Detail>
+            )}
             <Detail label="Last updated">{timeAgo(issue.updated_at)}</Detail>
           </div>
         </aside>

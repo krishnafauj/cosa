@@ -27,6 +27,7 @@ from .serializers import (
     IssueEditSerializer,
     IssueEventSerializer,
     IssueListSerializer,
+    IssueTableSerializer,
     IssueUpdateSerializer,
     MyIssueSerializer,
     ReasonSerializer,
@@ -41,8 +42,8 @@ BOARD_COLUMN_SIZE = 25
 
 
 def base_issue_queryset():
-    return Issue.objects.select_related("category", "created_by", "faculty", "tagged_member").prefetch_related(
-        "assignees"
+    return Issue.objects.select_related("category", "created_by", "faculty").prefetch_related(
+        "assignees", "tagged_members"
     )
 
 
@@ -108,7 +109,7 @@ class IssueViewSet(
 
     filterset_class = IssueFilter
     search_fields = ["title", "description"]
-    ordering_fields = ["created_at", "updated_at", "priority", "upvote_count"]
+    ordering_fields = ["id", "title", "status", "created_at", "updated_at", "priority", "upvote_count"]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
     http_method_names = ["get", "post", "patch", "head", "options"]
 
@@ -149,7 +150,7 @@ class IssueViewSet(
             description=data["description"],
             category=data["category"],
             priority=data["priority"],
-            tagged_member=data.get("tagged_member"),
+            tagged_members=data.get("tagged_members", []),
             files=request.FILES.getlist("attachments"),
         )
         return self._detail(issue, status.HTTP_201_CREATED)
@@ -186,6 +187,30 @@ class IssueViewSet(
                 }
             )
         return Response({"columns": columns})
+
+    @extend_schema(responses=IssueTableSerializer(many=True))
+    @action(detail=False, methods=["get"])
+    def table(self, request):
+        """Every issue as a table row (paginated, same filters as the list, ?ordering=...).
+        Adds the latest COSA update and latest student remark via subqueries."""
+        def latest(model, prefix, extra=()):
+            base = model.objects.filter(issue=OuterRef("pk")).order_by("-created_at")
+            ann = {
+                f"{prefix}_body": Subquery(base.values("body")[:1]),
+                f"{prefix}_at": Subquery(base.values("created_at")[:1]),
+                f"{prefix}_author": Subquery(base.values("author__full_name")[:1]),
+            }
+            for f in extra:
+                ann[f"{prefix}_{f}"] = Subquery(base.values(f)[:1])
+            return ann
+
+        qs = (
+            self.filter_queryset(self.get_queryset())
+            .annotate(**latest(IssueUpdate, "_lu"), **latest(Remark, "_lr", ("type",)))
+        )
+        page = self.paginate_queryset(qs)
+        data = IssueTableSerializer(page, many=True, context=self.get_serializer_context()).data
+        return self.get_paginated_response(data)
 
     @action(detail=False, methods=["get"])
     def mine(self, request):

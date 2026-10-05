@@ -49,9 +49,7 @@ class Issue(models.Model):
     status = models.CharField(max_length=11, choices=Status.choices, default=Status.NOT_STARTED)
 
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="raised_issues")
-    tagged_member = models.ForeignKey(
-        User, null=True, blank=True, on_delete=models.PROTECT, related_name="tagged_issues"
-    )
+    tagged_members = models.ManyToManyField(User, blank=True, related_name="tagged_issues")
     faculty = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.PROTECT, related_name="faculty_issues"
     )

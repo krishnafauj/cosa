@@ -41,6 +41,7 @@ export interface UserBrief {
   user_type: UserType;
   role_name: string | null;
   avatar_url: string;
+  roll_number?: string;
   branch?: Branch | "";
   year_of_study?: number | null;
 }
@@ -97,7 +98,7 @@ export interface Attachment {
 
 export interface IssueDetail extends IssueCard {
   description: string;
-  tagged_member: UserBrief | null;
+  tagged_members: UserBrief[];
   faculty: UserBrief | null;
   escalated_at: string | null;
   resolution: string;
@@ -116,6 +117,20 @@ export interface IssueDetail extends IssueCard {
     can_upvote: boolean;
     can_export: boolean;
   };
+}
+
+export interface LatestNote {
+  body: string;
+  author: string;
+  created_at: string;
+  type?: "REMARK" | "REOPEN" | "ESCALATION";
+}
+
+export interface IssueRow extends IssueCard {
+  tagged_members: UserBrief[];
+  faculty: UserBrief | null;
+  last_update: LatestNote | null;
+  last_remark: LatestNote | null;
 }
 
 export interface BoardColumn {

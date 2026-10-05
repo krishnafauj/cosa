@@ -51,7 +51,8 @@ class IssueAdmin(admin.ModelAdmin):
     list_display = ["id", "title", "category", "priority", "status", "is_escalated", "created_by", "created_at"]
     list_filter = ["status", "priority", "category", "is_escalated"]
     search_fields = ["title", "description", "created_by__email"]
-    raw_id_fields = ["created_by", "tagged_member", "faculty"]
+    raw_id_fields = ["created_by", "faculty"]
+    filter_horizontal = ["tagged_members"]
     readonly_fields = ["created_at", "updated_at", "upvote_count", "reopened_count"]
     inlines = [AssigneeInline, UpdateInline, RemarkInline, EventInline]
     date_hierarchy = "created_at"
