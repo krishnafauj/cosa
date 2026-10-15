@@ -38,8 +38,7 @@ export default function ProfileForm({ submitLabel, onSaved }: { submitLabel: str
   if (!user) return null;
   const isStudent = user.user_type === "STUDENT";
   const rollLocked = Boolean(user.roll_number) && /^[a-z]{2}\d{2}[a-z]\d+@iiitr\.ac\.in$/i.test(user.email);
-  const hasPhoto = user.has_photo || (!isStudent && Boolean(user.avatar_url));
-  const photoMissing = isStudent && !photo && !user.has_photo;
+  const hasPhoto = user.has_photo || Boolean(user.avatar_url);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -47,10 +46,6 @@ export default function ProfileForm({ submitLabel, onSaved }: { submitLabel: str
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (photoMissing) {
-      setError(new Error("Please add a profile photo."));
-      return;
-    }
     setSaving(true);
     try {
       const fd = new FormData();
@@ -89,12 +84,7 @@ export default function ProfileForm({ submitLabel, onSaved }: { submitLabel: str
               <Avatar user={user} size="lg" />
             </span>
           ) : (
-            <span
-              className={clsx(
-                "flex h-24 w-24 items-center justify-center rounded-full border-2 border-dashed bg-slate-50 text-slate-400",
-                photoMissing && error ? "border-rose-400" : "border-slate-300",
-              )}
-            >
+            <span className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-dashed border-slate-300 bg-slate-50 text-slate-400">
               <Camera className="h-7 w-7" />
             </span>
           )}
@@ -104,7 +94,9 @@ export default function ProfileForm({ submitLabel, onSaved }: { submitLabel: str
           <input type="file" accept="image/*" className="sr-only" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
         </label>
         <div className="text-sm">
-          <p className="font-medium text-slate-900">Profile photo {isStudent && <span className="text-rose-600">*</span>}</p>
+          <p className="font-medium text-slate-900">
+            Profile photo <span className="font-normal text-slate-400">(optional)</span>
+          </p>
           <p className="text-slate-500">A clear photo of your face, JPG or PNG, under 2 MB.</p>
         </div>
       </div>

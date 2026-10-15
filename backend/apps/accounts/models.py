@@ -93,7 +93,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Students must fill their profile once; others don't need to."""
         if self.user_type != self.UserType.STUDENT:
             return True
-        return all(getattr(self, f) for f in self.STUDENT_PROFILE_FIELDS) and bool(self.photo)
+        return all(getattr(self, f) for f in self.STUDENT_PROFILE_FIELDS)
 
     @property
     def year_of_study(self):
