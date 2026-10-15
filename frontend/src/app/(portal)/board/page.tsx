@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Maximize2, Plus, Search, Table2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { IssueTableOverlay, type TableState } from "@/components/IssueTable";
 import { IssueCardView, RaiseIssueModal, StatusChangeModal } from "@/components/issues";
 import { ErrorBox, PageHeader, PageLoader, Spinner } from "@/components/ui";
@@ -25,7 +25,7 @@ const QUICK_FILTERS = [
 
 const COLUMN_PAGE_SIZE = 15;
 
-/** One status column: fixed height, its own scrollbar, its own infinite list. */
+/** One status column: grows with its cards (the page scrolls), its own infinite list. */
 function BoardColumnView({
   status,
   filters,
@@ -49,7 +49,6 @@ function BoardColumnView({
   onDragStart: (issue: IssueCard) => void;
   onExpand: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   // Key starts with "board" so existing invalidateQueries(["board"]) calls refresh every column.
   const { items, count, isLoading, error, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteList<IssueCard>(
     ["board", "column", status],
@@ -69,8 +68,8 @@ function BoardColumnView({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={clsx(
-        // Same fixed height for all four columns; each scrolls on its own.
-        "flex h-[36rem] flex-col rounded-xl bg-slate-100/80 p-3 transition",
+        // Minimum height so empty columns still read as lanes; they grow with cards and the page scrolls.
+        "flex min-h-[36rem] flex-col rounded-xl bg-slate-100/80 p-3 transition",
         over && "ring-2 ring-brand-400 ring-offset-2",
       )}
     >
@@ -91,10 +90,7 @@ function BoardColumnView({
           </button>
         </div>
       </header>
-      <div
-        ref={scrollRef}
-        className="-mr-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:thin]"
-      >
+      <div className="flex flex-1 flex-col gap-2">
         <ErrorBox error={error} />
         {isLoading ? (
           <div className="flex justify-center py-8"><Spinner className="h-5 w-5" /></div>
@@ -112,7 +108,7 @@ function BoardColumnView({
               />
             ))}
             {items.length === 0 && <p className="px-1 py-6 text-center text-xs text-slate-400">No issues</p>}
-            <LoadMore root={scrollRef} hasMore={!!hasNextPage} loading={isFetchingNextPage} onLoad={() => fetchNextPage()} />
+            <LoadMore hasMore={!!hasNextPage} loading={isFetchingNextPage} onLoad={() => fetchNextPage()} />
           </>
         )}
       </div>

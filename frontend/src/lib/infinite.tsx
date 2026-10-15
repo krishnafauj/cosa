@@ -41,7 +41,8 @@ export function LoadMore({
   loading,
   onLoad,
 }: {
-  root: RefObject<HTMLElement | null>;
+  /** Scroll container to watch; omit to use the page (viewport). */
+  root?: RefObject<HTMLElement | null>;
   hasMore: boolean;
   loading: boolean;
   onLoad: () => void;
@@ -55,7 +56,7 @@ export function LoadMore({
     if (!el || !hasMore || loading) return;
     const io = new IntersectionObserver(
       (entries) => entries[0]?.isIntersecting && cb.current(),
-      { root: root.current, rootMargin: "200px" },
+      { root: root?.current ?? null, rootMargin: "200px" },
     );
     io.observe(el);
     return () => io.disconnect();
