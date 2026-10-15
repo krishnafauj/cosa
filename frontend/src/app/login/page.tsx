@@ -71,8 +71,9 @@ export default function LoginPage() {
       </div>
 
       {/* Right: sign in */}
-      <div className="flex flex-1 items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm">
+      <div className="flex flex-1 flex-col justify-between px-6 py-8 sm:py-10">
+        <div className="hidden lg:block" />
+        <div className="mx-auto w-full max-w-sm">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/iiitr-logo.png" alt="Indian Institute of Information Technology Raichur" className="mb-10 h-auto w-full max-w-[340px]" />
           <h2 className="text-xl font-semibold text-slate-900">Sign in to the COSA Portal</h2>
@@ -103,6 +104,11 @@ export default function LoginPage() {
             )}
           </div>
         </div>
+
+        <footer className="mt-8 text-center text-xs text-slate-400">
+          Made &amp; maintained by{" "}
+          <span className="font-medium text-slate-600">Krishna Faujdar (CS23B1036)</span>
+        </footer>
       </div>
     </div>
   );
